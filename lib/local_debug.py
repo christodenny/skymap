@@ -11,7 +11,7 @@ import platform
 REQUIRED_PYTHON_VERSION = 3.5
 IS_LINUX = 'linux' in os_platform
 DETECTED_CPU = platform.machine()
-IS_PI = "arm" in DETECTED_CPU
+IS_PI = True
 
 
 def validate_python_version():

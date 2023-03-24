@@ -519,7 +519,7 @@ def __load_station_config__(
     out_airport_map = {}
 
     json_config = __load_config_file__(config_file)
-    stations = json_config[WS2801]
+    stations = json_config[WS281x]
 
     for airport_data in stations:
         keylist = []

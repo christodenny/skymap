@@ -245,7 +245,7 @@ if __name__ == '__main__':
 
     weather.get_metars(stations.keys())
 
-    __test_all_leds__()
+    # __test_all_leds__()
 
     web_server = configuration_server.WeatherMapServer()
 
