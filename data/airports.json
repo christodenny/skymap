@@ -21,7 +21,7 @@
     { "KVCB": { "neopixel": 18 } },
     { "KAPC": { "neopixel": 19 } },
     { "KDVO": { "neopixel": 20 } },
-    { "KO69": { "neopixel": 21 } },
+    { "O69": { "neopixel": 21 } },
     { "KSTS": { "neopixel": 22 } },
     { "KUKI": { "neopixel": 23 } },
     { "KCIC": { "neopixel": 24 } },
