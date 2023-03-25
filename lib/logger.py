@@ -4,8 +4,11 @@ Simple wrapper around a logger.
 import logging
 import logging.handlers
 import threading
-from datetime import datetime
 
+from datetime import datetime
+from pathlib import Path
+
+LOG_DIRECTORY_NAME = "logs"
 LOG_NAME = "weathermap"
 
 __lock__ = threading.Lock()
@@ -72,7 +75,7 @@ class Logger(object):
 __python_logger__ = logging.getLogger(LOG_NAME)
 __python_logger__.setLevel(logging.DEBUG)
 __handler__ = logging.handlers.RotatingFileHandler(
-    "weathermap.log",
+    Path(LOG_DIRECTORY_NAME) / f"{LOG_NAME}.log",
     maxBytes=10485760,
     backupCount=10)
 __handler__.setFormatter(logging.Formatter(
