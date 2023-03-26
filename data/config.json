@@ -8,11 +8,11 @@
   "metar_station_inactive_minutes": 180,
   "airports_file": "/home/pilot/skymap/data/airports.json",
   "blink_old_stations": true,
-  "night_lights": false,
+  "night_lights": true,
   "night_populated_yellow": false,
   "snow_pulse": false,
   "snow_twinkle": false,
-  "night_category_proportion": 0.01,
-  "brightness_proportion": 0.1,
+  "night_category_proportion": 0.1,
+  "brightness_proportion": 0.4,
   "visualizer": 0
 }
