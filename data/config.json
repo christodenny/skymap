@@ -5,7 +5,7 @@
   "spi_device": 0,
   "gpio_pin": 18,
   "pixel_order": "RGB",
-  "metar_station_inactive_minutes": 180,
+  "metar_station_inactive_minutes": 360,
   "airports_file": "/home/pilot/skymap/data/airports.json",
   "blink_old_stations": true,
   "night_lights": true,
