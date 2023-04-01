@@ -609,7 +609,7 @@ def get_metars(
                 new_metars = get_metar_reports_from_web([identifier])
                 new_report = new_metars[identifier]
 
-                safe_log("New WX for {}={}".format(identifier, new_report))
+                safe_log(f"New WX: {new_report}")
 
                 if new_report is None or len(new_report) < 1:
                     continue
@@ -619,8 +619,6 @@ def get_metars(
                     __metar_report_cache__,
                     new_report)
                 metars[identifier] = new_report
-
-                safe_log('{}:{}'.format(identifier, new_report))
 
             except Exception as e:
                 safe_log_warning(
