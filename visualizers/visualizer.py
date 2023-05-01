@@ -30,22 +30,14 @@ def __get_rgb_night_color_to_render__(
         color_by_category,
         configuration.get_night_category_proportion())
 
-    # For the scenario where we simply dim the LED to account for sunrise/sunset
-    # then only use the period between sunset/sunrise start and civil twilight
-    if proportions[0] > 0.0:
-        color_to_render = colors_lib.get_color_mix(
-            color_by_category,
-            target_night_color,
-            proportions[0])
-    elif proportions[1] > 0.0:
-        color_to_render = colors_lib.get_color_mix(
-            target_night_color,
-            color_by_category,
-            proportions[1])
-    else:
-        color_to_render = target_night_color
+    if proportions[1] <= 0.0:
+        return target_night_color
 
-    return color_to_render
+    return colors_lib.get_color_mix(
+        target_night_color,
+        color_by_category,
+        proportions[1],
+    )
 
 
 def __get_night_color_to_render__(
