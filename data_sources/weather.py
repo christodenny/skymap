@@ -6,6 +6,7 @@ import csv
 import os
 import re
 import threading
+from typing import List, Optional
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -238,6 +239,50 @@ def get_civil_twilight(
         4 - when sunset starts
         5 - when it is full dark
     """
+    def _get_light_times_from_web(
+        lat: str, lng: str, date: datetime,
+    ) -> Optional[List]:
+        # Using "formatted=0" returns the times in a full datetime format
+        # Otherwise you need to do some silly math to figure out the date
+        # of the sunrise or sunset.
+        url = (
+            "http://api.sunrise-sunset.org/json?"
+            f"lat={lat}"
+            f"&lng={lng}"
+            f"&date={date.year}-{date.month}-{date.day}"
+            "&formatted=0"
+        )
+
+        json_result = []
+        try:
+            json_result = __rest_session__.get(
+                url, timeout=DEFAULT_READ_SECONDS).json()
+        except Exception as ex:
+            safe_log_warning(
+                '~get_civil_twilight() => None; EX:{}'.format(ex))
+            return []
+
+        if json_result is not None and "status" in json_result and json_result["status"] == "OK" and "results" in json_result:
+            sunrise = __get_utc_datetime__(json_result["results"]["sunrise"])
+            sunset = __get_utc_datetime__(json_result["results"]["sunset"])
+            sunrise_start = __get_utc_datetime__(
+                json_result["results"]["civil_twilight_begin"])
+            sunset_end = __get_utc_datetime__(
+                json_result["results"]["civil_twilight_end"])
+            sunrise_length = sunrise - sunrise_start
+            sunset_length = sunset_end - sunset
+            avg_transition_time = timedelta(
+                seconds=(sunrise_length.seconds + sunset_length.seconds) / 2)
+
+            light_times = [
+                sunrise_start,
+                sunrise,
+                sunrise + avg_transition_time,
+                sunset - avg_transition_time,
+                sunset,
+                sunset_end]
+            return light_times
+        return None
 
     is_cache_valid, cached_value = __is_cache_valid__(
         station_icao_code,
@@ -247,14 +292,13 @@ def get_civil_twilight(
     # Make sure that the sunrise time we are using is still valid...
     if is_cache_valid:
         hours_since_sunrise = (
-            current_utc_time - cached_value[1]).total_seconds() / 3600
-        if hours_since_sunrise > 24:
+            current_utc_time - cached_value[1]).total_seconds() // 3600
+        if hours_since_sunrise < 0 or hours_since_sunrise >= 24:
             is_cache_valid = False
             safe_log_warning(
                 "Twilight cache for {} had a HARD miss with delta={}".format(
                     station_icao_code,
                     hours_since_sunrise))
-            current_utc_time += timedelta(hours=1)
 
     if is_cache_valid and use_cache:
         return cached_value
@@ -264,57 +308,40 @@ def get_civil_twilight(
     if faa_code is None:
         return None
 
-    # Using "formatted=0" returns the times in a full datetime format
-    # Otherwise you need to do some silly math to figure out the date
-    # of the sunrise or sunset.
-    url = "http://api.sunrise-sunset.org/json?lat=" + \
-        str(__airport_locations__[faa_code]["lat"]) + \
-        "&lng=" + str(__airport_locations__[faa_code]["long"]) + \
-        "&date=" + str(current_utc_time.year) + "-" + str(current_utc_time.month) + "-" + str(current_utc_time.day) + \
-        "&formatted=0"
+    light_times = _get_light_times_from_web(
+        lat=str(__airport_locations__[faa_code]['lat']),
+        lng=str(__airport_locations__[faa_code]['long']),
+        date=current_utc_time,
+    )
 
-    json_result = []
-    try:
-        json_result = __rest_session__.get(
-            url, timeout=DEFAULT_READ_SECONDS).json()
-    except Exception as ex:
-        safe_log_warning(
-            '~get_civil_twilight() => None; EX:{}'.format(ex))
-        return []
+    if light_times is None:
+        safe_log_warning(f"Failed to get twilight times for {station_icao_code}")
+        return None
 
-    if json_result is not None and "status" in json_result and json_result["status"] == "OK" and "results" in json_result:
-        sunrise = __get_utc_datetime__(json_result["results"]["sunrise"])
-        sunset = __get_utc_datetime__(json_result["results"]["sunset"])
-        sunrise_start = __get_utc_datetime__(
-            json_result["results"]["civil_twilight_begin"])
-        sunset_end = __get_utc_datetime__(
-            json_result["results"]["civil_twilight_end"])
-        sunrise_length = sunrise - sunrise_start
-        sunset_length = sunset_end - sunset
-        avg_transition_time = timedelta(
-            seconds=(sunrise_length.seconds + sunset_length.seconds) / 2)
-        sunrise_and_sunset = [
-            sunrise_start,
-            sunrise,
-            sunrise + avg_transition_time,
-            sunset - avg_transition_time,
-            sunset,
-            sunset_end]
+    # Check if we need to get another day's data. This happens when the airport
+    # is in another date other than that of UTC
+    hours_since_sunrise = (
+        current_utc_time - light_times[1]).total_seconds() // 3600
+    if hours_since_sunrise < 0 or hours_since_sunrise >= 24:
+        light_times = _get_light_times_from_web(
+            lat=str(__airport_locations__[faa_code]['lat']),
+            lng=str(__airport_locations__[faa_code]['long']),
+            date=current_utc_time + timedelta(hours=hours_since_sunrise),
+        )
+
+    if light_times is not None:
         __set_cache__(
             station_icao_code,
             __daylight_cache__,
-            sunrise_and_sunset)
+            light_times,
+        )
 
-        return sunrise_and_sunset
-
-    return None
+    return light_times
 
 
 def is_daylight(
-    station_icao_code: str,
     light_times: list,
     current_utc_time: datetime = datetime.utcnow().replace(tzinfo=timezone.utc),
-    use_cache: bool = True
 ) -> bool:
     """
     Returns TRUE if the airport is currently in daylight
@@ -327,22 +354,9 @@ def is_daylight(
     """
 
     if light_times is not None and len(light_times) == 6:
-        # Deal with day old data...
-        hours_since_sunrise = (
-            current_utc_time - light_times[1]).total_seconds() / 3600
-
-        if hours_since_sunrise < 0:
-            light_times = get_civil_twilight(
-                station_icao_code,
-                current_utc_time - timedelta(hours=24),
-                use_cache)
-
-        if hours_since_sunrise > 24:
-            return True
-
         # Make sure the time between takes into account
         # The amount of time sunrise or sunset takes
-        is_after_sunrise = light_times[2] < current_utc_time
+        is_after_sunrise = current_utc_time > light_times[2]
         is_before_sunset = current_utc_time < light_times[3]
 
         return is_after_sunrise and is_before_sunset
@@ -351,10 +365,8 @@ def is_daylight(
 
 
 def is_night(
-    station_icao_code: str,
     light_times: list,
     current_utc_time: datetime = datetime.utcnow().replace(tzinfo=timezone.utc),
-    use_cache: bool = True
 ) -> bool:
     """
     Returns TRUE if the airport is currently in night
@@ -366,20 +378,7 @@ def is_night(
         boolean -- True if the airport is currently in night.
     """
 
-    if light_times is not None:
-        # Deal with day old data...
-        hours_since_sunrise = (
-            current_utc_time - light_times[1]).total_seconds() / 3600
-
-        if hours_since_sunrise < 0:
-            light_times = get_civil_twilight(
-                station_icao_code,
-                current_utc_time - timedelta(hours=24),
-                use_cache)
-
-        if hours_since_sunrise > 24:
-            return False
-
+    if light_times is not None and len(light_times) == 6:
         # Make sure the time between takes into account
         # The amount of time sunrise or sunset takes
         is_before_sunrise = current_utc_time < light_times[0]
@@ -453,10 +452,10 @@ def get_twilight_transition(
     if light_times is None or len(light_times) < 5:
         return 0.0, 1.0
 
-    if is_daylight(airport_icao_code, light_times, current_utc_time, use_cache):
+    if is_daylight(light_times, current_utc_time):
         return 0.0, 1.0
 
-    if is_night(airport_icao_code, light_times, current_utc_time, use_cache):
+    if is_night(light_times, current_utc_time):
         return 0.0, 0.0
 
     proportion_off_to_night = 0.0
