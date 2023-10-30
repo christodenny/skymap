@@ -27,8 +27,18 @@ def get_airport_category(
         try:
             is_inop = weather.is_station_inoperative(metar)
 
-            category = weather.INOP if is_inop\
-                else weather.get_category(airport, metar)
+            if is_inop:
+                category = weather.INOP
+
+                metar_age = weather.get_metar_age(metar)
+                metar_age_minutes = metar_age.total_seconds() // 60
+                safe_logging.safe_log_warning(
+                    f"Station {airport} is INOP. "
+                    f"METAR age: {metar_age_minutes} minutes. "
+                    f"METAR: {metar}."
+                )
+            else:
+                category = weather.get_category(airport, metar)
         except Exception as e:
             safe_logging.safe_log_warning(
                 "Exception while attempting to categorize METAR:{} EX:{}".format(metar, e))
